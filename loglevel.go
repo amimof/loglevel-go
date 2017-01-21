@@ -38,7 +38,7 @@ func (l *Level) SetLevel(level int) *Level {
     case 0:
       l.Num = 0
       l.Name = "ERROR"
-    case 1:
+    case 1:		
       l.Num = 1
       l.Name = "WARN"
     case 2:
@@ -70,10 +70,25 @@ func (l *Logger) Output(color, level, str string) error {
 	if l.PrintTime {
 		tim = time.Now().Format(l.TimeFormat)
 	}
-	l.buf = []byte(strings.Replace(strings.Trim(fmt.Sprintf("%s %s %s %s %s %s", color, tim, lvl, nam, str, CLR_N), " "), "  ", " ", -1))
+	
+	s := []byte(strings.Replace(strings.Trim(fmt.Sprintf("%s %s %s %s %s %s", color, tim, lvl, nam, str, CLR_N), " "), "  ", " ", -1))
+	l.buf = s
+	if len(s) == 0 || s[len(s)-1] != '\n' {
+		l.buf = append(l.buf, '\n')
+	}
 	_, err := l.out.Write(l.buf)
 	return err
 }
+
+// Writes str to stdout
+func (l *Logger) Out(str string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.buf = []byte(str)
+	_, err := l.out.Write(l.buf)
+	return err
+}
+
 // Return the level
 func (l *Logger) GetLevel() *Level {
 	return l.Level
@@ -126,16 +141,45 @@ func (l *Logger) Errorf(format string, message ...interface{}) {
 	if l.Level.Num >= ERROR {
 		l.Output(CLR_R, "ERROR", fmt.Sprintf(format, message...))
 	}
+	os.Exit(1)
 }
 
-// Prints an error message on a new line
+// Prints an error message on a new line followed by Exit
 func (l *Logger) Error(message ...interface{}) {
-  if l.Level.Num >= ERROR {
-    l.Output(CLR_R, "ERROR", fmt.Sprintln(message...))
-  }
+	if l.Level.Num >= ERROR {
+		l.Output(CLR_R, "ERROR", fmt.Sprintln(message...))
+	}
+	os.Exit(1)
 }
 
-type Empty struct {}
+// Same as fmt.Sprintln
+func (l *Logger) Println(message ...interface{}) {
+	l.Out(fmt.Sprintln(message...))
+}
+
+// Same as fmt.Sprintf
+func (l *Logger) Printf(format string, message ...interface{}) {
+	l.Out(fmt.Sprintf(format, message...))
+}
+
+// Same as fmt.Sprint followed by panic
+func (l *Logger) Panic(message ...interface{}) {
+	l.Out(fmt.Sprint(message...))
+	panic(message)
+}
+
+// Same as fmt.Sprintln followed by panic
+func (l *Logger) Panicln(message ...interface{}) {
+	l.Out(fmt.Sprintln(message...))
+	panic(message)
+}
+
+// Same as fmt.Sprintf followed by panic
+func (l *Logger) Panicf(format string, message ...interface{}) {
+	l.Out(fmt.Sprintf(format, message...))
+	panic(message)
+}
+
 
 // Create return logger
 func New() *Logger {
