@@ -34,7 +34,7 @@ func (l *Logger) SetLevel(level int) *Logger {
 }
 
 // Writes the specified string to std and colors it accordingly
-func (l *Logger) Output(color, level, str string) error {
+func (l *Logger) Output(color, level, str string) (n int, err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.buf = l.buf[:0]
@@ -60,8 +60,8 @@ func (l *Logger) Output(color, level, str string) error {
 	if len(str) == 0 || str[len(str)-1] != '\n' {
 		l.buf = append(l.buf, '\n')
 	}
-	_, err := l.out.Write(l.buf)
-	return err
+	n, err = l.out.Write(l.buf)
+	return
 }
 
 // Writes str to stdout
@@ -173,6 +173,7 @@ func New() *Logger {
 		PrintTime: true,
 		PrintName: true,
 		PrintLevel: true,
+		UseColors: true,
 		TimeFormat: time.RFC3339,
 	}
 }
