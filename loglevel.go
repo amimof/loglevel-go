@@ -6,7 +6,6 @@ import (
 	"sync"
 	"os"
 	"time"
-	"strings"
 )
 
 const (
@@ -18,39 +17,19 @@ const (
 
 type Logger struct {
 	Name  string
-	Level *Level
+	Level int
 	TimeFormat string
 	PrintTime bool
 	PrintName bool
 	PrintLevel bool
+	UseColors bool
 	mu sync.Mutex
 	out io.Writer
 	buf []byte
 }
 
-type Level struct {
-  Num int
-  Name string
-}
-
-func (l *Level) SetLevel(level int) *Level {
-  switch level {
-    case 0:
-      l.Num = 0
-      l.Name = "ERROR"
-    case 1:		
-      l.Num = 1
-      l.Name = "WARN"
-    case 2:
-      l.Num = 2
-      l.Name = "INFO"
-    case 3:
-      l.Num = 3
-      l.Name = "DEBUG"
-    default:
-      l.Num = 1
-      l.Name = "WARN"
-  }
+func (l *Logger) SetLevel(level int) *Logger {
+  l.Level = level
   return l
 }
 
@@ -58,22 +37,27 @@ func (l *Level) SetLevel(level int) *Level {
 func (l *Logger) Output(color, level, str string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	nam := ""
-	lvl := ""
-	tim := "" 
-	if l.PrintName {
-		nam = l.Name
-	}
-	if l.PrintLevel {
-		lvl = level
+	l.buf = l.buf[:0]
+	if l.UseColors {
+		l.buf = append(l.buf, color...)	
 	}
 	if l.PrintTime {
-		tim = time.Now().Format(l.TimeFormat)
+		l.buf = append(l.buf, time.Now().Format(l.TimeFormat)...)
+		l.buf = append(l.buf, ' ')
 	}
-	
-	s := []byte(strings.Replace(strings.Trim(fmt.Sprintf("%s %s %s %s %s %s", color, tim, lvl, nam, str, CLR_N), " "), "  ", " ", -1))
-	l.buf = s
-	if len(s) == 0 || s[len(s)-1] != '\n' {
+	if l.PrintLevel {
+		l.buf = append(l.buf, level...)
+		l.buf = append(l.buf, ' ')
+	}
+	if l.PrintName && len(l.Name) > 0 {
+		l.buf = append(l.buf, l.Name...)
+		l.buf = append(l.buf, ' ')
+	}
+	l.buf = append(l.buf, str...)
+	if l.UseColors {
+		l.buf = append(l.buf, CLR_N...)
+	}
+	if len(str) == 0 || str[len(str)-1] != '\n' {
 		l.buf = append(l.buf, '\n')
 	}
 	_, err := l.out.Write(l.buf)
@@ -89,56 +73,51 @@ func (l *Logger) Out(str string) error {
 	return err
 }
 
-// Return the level
-func (l *Logger) GetLevel() *Level {
-	return l.Level
-}
-
 // Prints according to fmt.Sprintf format specifier and returns the resulting string
 func (l *Logger) Debugf(format string, message ...interface{}) {
-  if l.Level.Num >= DEBUG {
+  if l.Level >= DEBUG {
 		l.Output(CLR_G, "DEBUG", fmt.Sprintf(format, message...))
   }
 }
 
 // Prints a debug message on a new line
 func (l *Logger) Debug(message ...interface{}) {
-  if l.Level.Num >= DEBUG {
-		l.Output(CLR_G, "DEBUG", fmt.Sprintln(message...))
+  if l.Level >= DEBUG {
+		l.Output(CLR_G, "DEBUG", fmt.Sprint(message...))
   }
 }
 
 // Prints according to fmt.Sprintf format specifier and returns the resulting string
 func (l *Logger) Infof(format string, message ...interface{}) {
-  if l.Level.Num >= INFO {
+  if l.Level >= INFO {
 		l.Output(CLR_W, "INFO", fmt.Sprintf(format, message...))
   }
 }
 
 // Prints n info message on a new line
 func (l *Logger) Info(message ...interface{}) {
-  if l.Level.Num >= INFO {
-		l.Output(CLR_W, "INFO",fmt.Sprintln(message...))
+  if l.Level >= INFO {
+		l.Output(CLR_W, "INFO",fmt.Sprint(message...))
   }
 }
 
 // Prints according to fmt.Sprintf format specifier and returns the resulting string
 func (l *Logger) Warnf(format string, message ...interface{}) {
-	if l.Level.Num >= WARN {
+	if l.Level >= WARN {
 		l.Output(CLR_Y, "WARN", fmt.Sprintf(format, message...))
 	}
 }
 
 // Prints a warning message on a new line
 func (l *Logger) Warn(message ...interface{}) {
-  if l.Level.Num >= WARN {
-		l.Output(CLR_Y, "WARN", fmt.Sprintln(message...))
+  if l.Level >= WARN {
+		l.Output(CLR_Y, "WARN", fmt.Sprint(message...))
   }
 }
 
 // Prints according to fmt.Sprintf format specifier and returns the resulting string
 func (l *Logger) Errorf(format string, message ...interface{}) {
-	if l.Level.Num >= ERROR {
+	if l.Level >= ERROR {
 		l.Output(CLR_R, "ERROR", fmt.Sprintf(format, message...))
 	}
 	os.Exit(1)
@@ -146,10 +125,15 @@ func (l *Logger) Errorf(format string, message ...interface{}) {
 
 // Prints an error message on a new line followed by Exit
 func (l *Logger) Error(message ...interface{}) {
-	if l.Level.Num >= ERROR {
-		l.Output(CLR_R, "ERROR", fmt.Sprintln(message...))
+	if l.Level >= ERROR {
+		l.Output(CLR_R, "ERROR", fmt.Sprint(message...))
 	}
 	os.Exit(1)
+}
+
+// Same as fmt.Sprint
+func (l *Logger) Print(message ...interface{}) {
+	l.Out(fmt.Sprint(message...))
 }
 
 // Same as fmt.Sprintln
@@ -180,13 +164,12 @@ func (l *Logger) Panicf(format string, message ...interface{}) {
 	panic(message)
 }
 
-
 // Create return logger
 func New() *Logger {
 	return &Logger{
 		out: os.Stderr,
 		Name:  "",
-		Level: &Level{1, "INFO"},
+		Level: INFO,
 		PrintTime: true,
 		PrintName: true,
 		PrintLevel: true,
